@@ -281,4 +281,211 @@ class ChebyshevTransformTest {
                 )
         );
     }
+
+    @Test
+    void testTransformLinearFunction() {
+        /*
+         * f(x) = x = T1(x)
+         *
+         * Values on Lobatto nodes for n = 4:
+         *
+         * x = 1, sqrt(2)/2, 0, -sqrt(2)/2, -1
+         */
+        double[] values = {
+                1.0,
+                Math.sqrt(2.0) / 2.0,
+                0.0,
+                -Math.sqrt(2.0) / 2.0,
+                -1.0
+        };
+
+        double[] coefficients =
+                ChebyshevTransform.transform(values);
+
+        assertEquals(
+                0.0,
+                coefficients[0],
+                1e-12
+        );
+
+        assertEquals(
+                1.0,
+                coefficients[1],
+                1e-12
+        );
+
+        assertEquals(
+                0.0,
+                coefficients[2],
+                1e-12
+        );
+
+        assertEquals(
+                0.0,
+                coefficients[3],
+                1e-12
+        );
+
+        assertEquals(
+                0.0,
+                coefficients[4],
+                1e-12
+        );
+    }
+
+    @Test
+    void testTransformQuadraticFunction() {
+        /*
+         * x² = (T2(x) + T0(x)) / 2
+         */
+        double[] values = new double[5];
+
+        double[] nodes =
+                ChebyshevTransform.secondKindNodes(4);
+
+        for (int i = 0; i < nodes.length; i++) {
+            values[i] =
+                    nodes[i] * nodes[i];
+        }
+
+        double[] coefficients =
+                ChebyshevTransform.transform(values);
+
+        assertEquals(
+                0.5,
+                coefficients[0],
+                1e-12
+        );
+
+        assertEquals(
+                0.0,
+                coefficients[1],
+                1e-12
+        );
+
+        assertEquals(
+                0.5,
+                coefficients[2],
+                1e-12
+        );
+    }
+
+    @Test
+    void testTransformAndEvaluate() {
+        /*
+         * f(x) = 1 + 2x + 3x²
+         */
+        double[] values = new double[9];
+
+        double[] nodes =
+                ChebyshevTransform.secondKindNodes(8);
+
+        for (int i = 0; i < nodes.length; i++) {
+
+            double x = nodes[i];
+
+            values[i] =
+                    1.0
+                            + 2.0 * x
+                            + 3.0 * x * x;
+        }
+
+        double[] coefficients =
+                ChebyshevTransform.transform(values);
+
+        double x = 0.37;
+
+        double expected =
+                1.0
+                        + 2.0 * x
+                        + 3.0 * x * x;
+
+        double actual =
+                ChebyshevTransform.evaluate(
+                        coefficients,
+                        x
+                );
+
+        assertEquals(
+                expected,
+                actual,
+                1e-10
+        );
+    }
+
+    @Test
+    void testInverseTransformConstant() {
+
+        double[] coefficients = {
+                5.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+        };
+
+        double[] values =
+                ChebyshevTransform.inverseTransform(coefficients);
+
+        for (double value : values) {
+            assertEquals(5.0, value, 1e-12);
+        }
+    }
+
+    @Test
+    void testInverseTransformLinear() {
+
+        double[] coefficients = {
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0
+        };
+
+        double[] values =
+                ChebyshevTransform.inverseTransform(coefficients);
+
+        double[] nodes =
+                ChebyshevTransform.secondKindNodes(4);
+
+        for (int i = 0; i < nodes.length; i++) {
+            assertEquals(
+                    nodes[i],
+                    values[i],
+                    1e-12
+            );
+        }
+    }
+
+    @Test
+    void testTransformInverseRoundTrip() {
+
+        double[] originalCoefficients = {
+                1.0,
+                2.0,
+                0.5,
+                -1.0,
+                0.25
+        };
+
+        double[] values =
+                ChebyshevTransform.inverseTransform(
+                        originalCoefficients
+                );
+
+        double[] recoveredCoefficients =
+                ChebyshevTransform.transform(values);
+
+        for (int i = 0;
+             i < originalCoefficients.length;
+             i++) {
+
+            assertEquals(
+                    originalCoefficients[i],
+                    recoveredCoefficients[i],
+                    1e-10
+            );
+        }
+    }
 }

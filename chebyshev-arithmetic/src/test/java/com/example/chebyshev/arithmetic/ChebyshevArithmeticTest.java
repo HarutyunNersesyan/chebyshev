@@ -476,4 +476,122 @@ class ChebyshevArithmeticTest {
                         )
         );
     }
+
+    @Test
+    void testDivideWithRemainder() {
+
+        /*
+         * f(x) = x² + 1
+         *
+         * In Chebyshev basis:
+         *
+         * x² = 1/2(T2 + T0)
+         *
+         * therefore:
+         *
+         * f = 3/2 T0 + 1/2 T2
+         *
+         * g(x) = x = T1
+         *
+         * x² + 1 = x*x + 1
+         *
+         * quotient = x
+         * remainder = 1
+         */
+
+        double[] f = {
+                1.5,
+                0.0,
+                0.5
+        };
+
+        double[] g = {
+                0.0,
+                1.0
+        };
+
+        ChebyshevArithmetic.DivisionResult result =
+                ChebyshevArithmetic.divideWithRemainder(
+                        f,
+                        g
+                );
+
+        assertArrayEquals(
+                new double[]{
+                        0.0,
+                        1.0
+                },
+                result.getQuotient(),
+                1e-12
+        );
+
+        assertArrayEquals(
+                new double[]{
+                        1.0
+                },
+                result.getRemainder(),
+                1e-12
+        );
+    }
+
+    @Test
+    void testDivideWithZeroRemainder() {
+
+        /*
+         * f(x) = 2 * x
+         *
+         * g(x) = 2
+         *
+         * quotient = x
+         * remainder = 0
+         */
+
+        double[] f = {
+                0.0,
+                2.0
+        };
+
+        double[] g = {
+                2.0
+        };
+
+        ChebyshevArithmetic.DivisionResult result =
+                ChebyshevArithmetic.divideWithRemainder(
+                        f,
+                        g
+                );
+
+        assertArrayEquals(
+                new double[]{
+                        0.0,
+                        1.0
+                },
+                result.getQuotient(),
+                1e-12
+        );
+
+        assertArrayEquals(
+                new double[]{
+                        0.0
+                },
+                result.getRemainder(),
+                1e-12
+        );
+    }
+
+
+    @Test
+    void testDivideWithRemainderByZeroFails() {
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        ChebyshevArithmetic.divideWithRemainder(
+                                new double[]{1.0, 2.0},
+                                new double[]{0.0}
+                        )
+        );
+    }
+
+
 }

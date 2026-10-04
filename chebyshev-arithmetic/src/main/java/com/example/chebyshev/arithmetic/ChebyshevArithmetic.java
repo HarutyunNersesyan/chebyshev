@@ -402,4 +402,355 @@ public final class ChebyshevArithmetic {
                 last + 1
         );
     }
+
+    /**
+     * Performs polynomial division in the Chebyshev basis.
+     *
+     * Returns:
+     *
+     * f(x) = g(x) * q(x) + r(x)
+     *
+     * where:
+     * q(x) is the quotient
+     * r(x) is the remainder
+     */
+    public static DivisionResult divideWithRemainder(
+            double[] f,
+            double[] g
+    ) {
+        validateCoefficients(f);
+        validateCoefficients(g);
+
+        double[] dividend =
+                trimTrailingZeros(f);
+
+        double[] divisor =
+                trimTrailingZeros(g);
+
+        if (isZeroPolynomial(divisor)) {
+            throw new IllegalArgumentException(
+                    "Division by zero polynomial is not allowed"
+            );
+        }
+
+        if (degree(dividend) < degree(divisor)) {
+            return new DivisionResult(
+                    new double[]{0.0},
+                    dividend.clone()
+            );
+        }
+
+        double[] dividendPower =
+                chebyshevToPower(dividend);
+
+        double[] divisorPower =
+                chebyshevToPower(divisor);
+
+        double[][] division =
+                dividePowerPolynomials(
+                        dividendPower,
+                        divisorPower
+                );
+
+        double[] quotient =
+                powerToChebyshev(
+                        division[0]
+                );
+
+        double[] remainder =
+                powerToChebyshev(
+                        division[1]
+                );
+
+        return new DivisionResult(
+                quotient,
+                remainder
+        );
+    }
+
+    private static int degree(
+            double[] coefficients
+    ) {
+        return trimTrailingZeros(
+                coefficients
+        ).length - 1;
+    }
+
+    private static boolean isZeroPolynomial(
+            double[] coefficients
+    ) {
+        return coefficients.length == 1
+                && Math.abs(coefficients[0]) < 1e-14;
+    }
+    private static double[] chebyshevToPower(
+            double[] coefficients
+    ) {
+        int n = coefficients.length - 1;
+
+        double[][] chebyshev =
+                new double[n + 1][];
+
+        /*
+         * T0 = 1
+         */
+        chebyshev[0] =
+                new double[]{1.0};
+
+        if (n >= 1) {
+
+            /*
+             * T1 = x
+             */
+            chebyshev[1] =
+                    new double[]{0.0, 1.0};
+        }
+
+        /*
+         * Tn = 2x*T(n-1) - T(n-2)
+         */
+        for (int k = 2; k <= n; k++) {
+
+            double[] current =
+                    new double[k + 1];
+
+            for (int j = 0;
+                 j < chebyshev[k - 1].length;
+                 j++) {
+
+                current[j + 1] +=
+                        2.0 * chebyshev[k - 1][j];
+            }
+
+            for (int j = 0;
+                 j < chebyshev[k - 2].length;
+                 j++) {
+
+                current[j] -=
+                        chebyshev[k - 2][j];
+            }
+
+            chebyshev[k] = current;
+        }
+
+        double[] result =
+                new double[n + 1];
+
+        for (int k = 0; k <= n; k++) {
+
+            for (int j = 0;
+                 j < chebyshev[k].length;
+                 j++) {
+
+                result[j] +=
+                        coefficients[k]
+                                * chebyshev[k][j];
+            }
+        }
+
+        return trimTrailingZeros(result);
+    }
+
+    private static double[] powerToChebyshev(
+            double[] coefficients
+    ) {
+        double[] remaining =
+                coefficients.clone();
+
+        int n = remaining.length - 1;
+
+        double[] result =
+                new double[n + 1];
+
+        /*
+         * Process highest powers first.
+         */
+        for (int k = n; k >= 0; k--) {
+
+            if (Math.abs(remaining[k]) < 1e-14) {
+                continue;
+            }
+
+            double leadingCoefficient;
+
+            if (k == 0) {
+                leadingCoefficient = 1.0;
+            } else {
+                /*
+                 * Leading coefficient of T_k:
+                 *
+                 * 2^(k-1)
+                 */
+                leadingCoefficient =
+                        Math.pow(2.0, k - 1);
+            }
+
+            double factor =
+                    remaining[k]
+                            / leadingCoefficient;
+
+            result[k] += factor;
+
+            /*
+             * Subtract factor * T_k.
+             */
+            double[] tk =
+                    chebyshevPolynomialInPowerBasis(k);
+
+            for (int j = 0;
+                 j < tk.length;
+                 j++) {
+
+                remaining[j] -=
+                        factor * tk[j];
+            }
+        }
+
+        return trimTrailingZeros(result);
+    }
+
+    private static double[] chebyshevPolynomialInPowerBasis(
+            int n
+    ) {
+        if (n == 0) {
+            return new double[]{1.0};
+        }
+
+        if (n == 1) {
+            return new double[]{0.0, 1.0};
+        }
+
+        double[] previousPrevious =
+                new double[]{1.0};
+
+        double[] previous =
+                new double[]{0.0, 1.0};
+
+        for (int k = 2; k <= n; k++) {
+
+            double[] current =
+                    new double[k + 1];
+
+            for (int j = 0;
+                 j < previous.length;
+                 j++) {
+
+                current[j + 1] +=
+                        2.0 * previous[j];
+            }
+
+            for (int j = 0;
+                 j < previousPrevious.length;
+                 j++) {
+
+                current[j] -=
+                        previousPrevious[j];
+            }
+
+            previousPrevious = previous;
+            previous = current;
+        }
+
+        return previous;
+    }
+
+    private static double[][] dividePowerPolynomials(
+            double[] dividend,
+            double[] divisor
+    ) {
+        double[] remainder =
+                dividend.clone();
+
+        int dividendDegree =
+                dividend.length - 1;
+
+        int divisorDegree =
+                divisor.length - 1;
+
+        int quotientDegree =
+                dividendDegree - divisorDegree;
+
+        double[] quotient =
+                new double[quotientDegree + 1];
+
+        double divisorLeading =
+                divisor[divisorDegree];
+
+        if (Math.abs(divisorLeading) < 1e-14) {
+            throw new IllegalArgumentException(
+                    "Divisor leading coefficient must not be zero"
+            );
+        }
+
+        for (int k = dividendDegree;
+             k >= divisorDegree;
+             k--) {
+
+            double factor =
+                    remainder[k]
+                            / divisorLeading;
+
+            int quotientIndex =
+                    k - divisorDegree;
+
+            quotient[quotientIndex] =
+                    factor;
+
+            for (int j = 0;
+                 j <= divisorDegree;
+                 j++) {
+
+                remainder[
+                        j + quotientIndex
+                        ] -= factor * divisor[j];
+            }
+        }
+
+        double[] trimmedRemainder =
+                trimTrailingZeros(remainder);
+
+        /*
+         * If the remainder is numerically zero,
+         * return exactly [0].
+         */
+        if (trimmedRemainder.length == 1
+                && Math.abs(
+                trimmedRemainder[0]
+        ) < 1e-12) {
+
+            trimmedRemainder =
+                    new double[]{0.0};
+        }
+
+        return new double[][]{
+                trimTrailingZeros(quotient),
+                trimmedRemainder
+        };
+    }
+
+    public static final class DivisionResult {
+
+        private final double[] quotient;
+        private final double[] remainder;
+
+        private DivisionResult(
+                double[] quotient,
+                double[] remainder
+        ) {
+            this.quotient =
+                    quotient.clone();
+
+            this.remainder =
+                    remainder.clone();
+        }
+
+        public double[] getQuotient() {
+            return quotient.clone();
+        }
+
+        public double[] getRemainder() {
+            return remainder.clone();
+        }
+    }
+
+
 }

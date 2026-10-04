@@ -4,6 +4,8 @@ import com.example.chebyshev.core.ChebyshevCore;
 
 public final class ChebyshevMatrixSolver {
 
+    private static final double EPSILON = 1e-14;
+
     private ChebyshevMatrixSolver() {
         // Utility class
     }
@@ -25,11 +27,8 @@ public final class ChebyshevMatrixSolver {
 
         int n = A.length;
 
-        double[][] matrix =
-                copyMatrix(A);
-
-        double[] rhs =
-                b.clone();
+        double[][] matrix = copyMatrix(A);
+        double[] rhs = b.clone();
 
         /*
          * Forward elimination
@@ -38,9 +37,6 @@ public final class ChebyshevMatrixSolver {
              column < n;
              column++) {
 
-            /*
-             * Find pivot row.
-             */
             int pivotRow = column;
 
             double maxValue =
@@ -59,10 +55,7 @@ public final class ChebyshevMatrixSolver {
                 }
             }
 
-            /*
-             * Singular matrix check.
-             */
-            if (maxValue < 1e-14) {
+            if (maxValue < EPSILON) {
                 throw new IllegalArgumentException(
                         "Matrix is singular or nearly singular"
                 );
@@ -147,6 +140,175 @@ public final class ChebyshevMatrixSolver {
     }
 
     /**
+     * Builds the Toeplitz part of the Chebyshev
+     * multiplication matrix.
+     *
+     * T(i,j) = g[|i-j|]
+     */
+    public static double[][] buildToeplitzPart(
+            double[] g,
+            int degree
+    ) {
+        validateCoefficients(g);
+        validateDegree(degree);
+
+        int size = degree + 1;
+
+        double[][] matrix =
+                new double[size][size];
+
+        for (int i = 0; i < size; i++) {
+
+            for (int j = 0; j < size; j++) {
+
+                int index =
+                        Math.abs(i - j);
+
+                if (index < g.length) {
+                    matrix[i][j] =
+                            g[index];
+                }
+            }
+        }
+
+        return matrix;
+    }
+
+    /**
+     * Builds the Hankel part of the Chebyshev
+     * multiplication matrix.
+     *
+     * H(i,j) = g[i+j]
+     */
+    public static double[][] buildHankelPart(
+            double[] g,
+            int degree
+    ) {
+        validateCoefficients(g);
+        validateDegree(degree);
+
+        int size = degree + 1;
+
+        double[][] matrix =
+                new double[size][size];
+
+        for (int i = 0; i < size; i++) {
+
+            for (int j = 0; j < size; j++) {
+
+                int index = i + j;
+
+                if (index < g.length) {
+                    matrix[i][j] =
+                            g[index];
+                }
+            }
+        }
+
+        return matrix;
+    }
+
+    /**
+     * Builds the Toeplitz + Hankel matrix
+     * corresponding to Chebyshev multiplication.
+     *
+     * A = 1/2 (T + H)
+     *
+     * where
+     *
+     * T(i,j) = g[|i-j|]
+     *
+     * H(i,j) = g[i+j]
+     *
+     * Therefore:
+     *
+     * A(i,j) =
+     * 1/2 * (g[|i-j|] + g[i+j])
+     *
+     * whenever the corresponding coefficient exists.
+     */
+    public static double[][] buildToeplitzHankelMatrix(
+            double[] g,
+            int degree
+    ) {
+        validateCoefficients(g);
+        validateDegree(degree);
+
+        int size = degree + 1;
+
+        double[][] toeplitz =
+                buildToeplitzPart(g, degree);
+
+        double[][] hankel =
+                buildHankelPart(g, degree);
+
+        double[][] matrix =
+                new double[size][size];
+
+        for (int i = 0; i < size; i++) {
+
+            for (int j = 0; j < size; j++) {
+
+                matrix[i][j] =
+                        0.5 * (
+                                toeplitz[i][j]
+                                        + hankel[i][j]
+                        );
+            }
+        }
+
+        return matrix;
+    }
+
+    /**
+     * Solves a Toeplitz + Hankel Chebyshev
+     * multiplication system:
+     *
+     * A * q = f
+     *
+     * where
+     *
+     * A = 1/2 (T + H)
+     *
+     * This method preserves the structured
+     * Chebyshev representation while using
+     * the existing stable Gaussian solver
+     * with partial pivoting.
+     */
+    public static double[] solveToeplitzHankel(
+            double[] g,
+            double[] f,
+            int degree
+    ) {
+        validateCoefficients(g);
+        validateCoefficients(f);
+        validateDegree(degree);
+
+        int size = degree + 1;
+
+        double[] rhs =
+                new double[size];
+
+        for (int i = 0;
+             i < Math.min(f.length, size);
+             i++) {
+
+            rhs[i] = f[i];
+        }
+
+        double[][] matrix =
+                buildToeplitzHankelMatrix(
+                        g,
+                        degree
+                );
+
+        return solve(
+                matrix,
+                rhs
+        );
+    }
+
+    /**
      * Builds a Chebyshev multiplication matrix.
      *
      * The matrix represents multiplication by
@@ -154,81 +316,22 @@ public final class ChebyshevMatrixSolver {
      *
      * g(x) = g_0 T_0 + ... + g_m T_m
      *
-     * using the identity:
+     * using:
      *
      * T_m T_n =
-     * 1/2 [T_{m+n} + T_{|m-n|}]
+     * 1/2 [T_{m+n} + T_|m-n|]
      *
-     * The resulting matrix is truncated to
-     * the requested degree.
+     * The matrix is truncated to the
+     * requested degree.
      */
     public static double[][] buildSystemMatrix(
             double[] g,
             int degree
     ) {
-        validateCoefficients(g);
-
-        if (degree < 0) {
-            throw new IllegalArgumentException(
-                    "Degree must be non-negative"
-            );
-        }
-
-        int size = degree + 1;
-
-        double[][] matrix =
-                new double[size][size];
-
-        /*
-         * Each column corresponds to:
-         *
-         * g(x) * T_j(x)
-         */
-        for (int j = 0;
-             j < size;
-             j++) {
-
-            for (int k = 0;
-                 k < g.length;
-                 k++) {
-
-                double coefficient =
-                        g[k];
-
-                if (Math.abs(coefficient) < 1e-15) {
-                    continue;
-                }
-
-                /*
-                 * T_k * T_j
-                 *
-                 * = 1/2(
-                 * T_{k+j}
-                 * +
-                 * T_|k-j|
-                 * )
-                 */
-
-                int sumIndex =
-                        k + j;
-
-                int diffIndex =
-                        Math.abs(k - j);
-
-                double value =
-                        0.5 * coefficient;
-
-                if (sumIndex < size) {
-                    matrix[sumIndex][j] += value;
-                }
-
-                if (diffIndex < size) {
-                    matrix[diffIndex][j] += value;
-                }
-            }
-        }
-
-        return matrix;
+        return buildToeplitzHankelMatrix(
+                g,
+                degree
+        );
     }
 
     /**
@@ -248,34 +351,12 @@ public final class ChebyshevMatrixSolver {
     ) {
         validateCoefficients(f);
         validateCoefficients(g);
+        validateDegree(degree);
 
-        if (degree < 0) {
-            throw new IllegalArgumentException(
-                    "Degree must be non-negative"
-            );
-        }
-
-        int size = degree + 1;
-
-        double[] rhs =
-                new double[size];
-
-        for (int i = 0;
-             i < Math.min(f.length, size);
-             i++) {
-
-            rhs[i] = f[i];
-        }
-
-        double[][] matrix =
-                buildSystemMatrix(
-                        g,
-                        degree
-                );
-
-        return solve(
-                matrix,
-                rhs
+        return solveToeplitzHankel(
+                g,
+                f,
+                degree
         );
     }
 
@@ -369,6 +450,16 @@ public final class ChebyshevMatrixSolver {
                         "Coefficients must be finite"
                 );
             }
+        }
+    }
+
+    private static void validateDegree(
+            int degree
+    ) {
+        if (degree < 0) {
+            throw new IllegalArgumentException(
+                    "Degree must be non-negative"
+            );
         }
     }
 
